@@ -8,18 +8,6 @@ import scala.util.parsing.combinator.RegexParsers
 import scala.annotation.tailrec
 import scala.io.StdIn
 
-object Application {
-
-  def main(args: Array[String]): Unit = {
-    val system = ActorSystem(s"cvk-system")
-    val root = "https://www.cvk.gov.ua/pls/vnd2019/"
-    val path = "wp401pt001f01=919.html"
-    val app = new Application(system, root, path)
-    app.commandLoop()
-  }
-
-}
-
 class Application(system: ActorSystem, root: String, path: String)
     extends Terminal {
 
@@ -31,7 +19,7 @@ class Application(system: ActorSystem, root: String, path: String)
   }
 
   @tailrec
-  private def commandLoop(): Unit = {
+  private[crawler] final def commandLoop(): Unit = {
     val commandString = StdIn.readLine()
 
     if (commandString == null) {

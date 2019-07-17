@@ -16,15 +16,17 @@ class Crawler extends Actor with ActorLogging {
 
   override def receive: Receive = {
     case Tick(root, uri) =>
-      context.actorOf(AlphabeticalPageLookup.props) ! AlphabeticalPageLookup
+      context.actorOf(AlphabeticalPageLookup.props(), uri) ! AlphabeticalPageLookup
         .Pull(root, uri)
   }
 
   def waiting: Receive = {
     case AlphabeticalPageLookup.Response(candidates) =>
+      sender() ! PoisonPill
+      context.actorOf(DatabaseWriter.props(), "writer") ! DatabaseWriter.Persist(candidates)
+    case DatabaseWriter.Done =>
       context.unbecome()
       sender() ! PoisonPill
-      log.info(s"candidates: ${candidates.mkString("\n")}")
   }
 
 }

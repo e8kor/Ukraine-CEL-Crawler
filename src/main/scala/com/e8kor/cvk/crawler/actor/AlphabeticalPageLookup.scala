@@ -6,12 +6,8 @@ import net.ruippeixotog.scalascraper.browser._
 
 object AlphabeticalPageLookup {
 
-  val props: Props = {
-    val browser = JsoupBrowser()
-
-    val pattern = "#pure-wrap > table > tbody > tr > td > a"
-
-    Props(new AlphabeticalPageLookup(browser, pattern))
+  def props(browser: Browser = JsoupBrowser()): Props = {
+    Props(new AlphabeticalPageLookup(browser))
   }
 
   sealed trait AlphabeticalPageAction
@@ -19,7 +15,7 @@ object AlphabeticalPageLookup {
   case class Response(candidates: Seq[Candidate]) extends AlphabeticalPageAction
 }
 
-class AlphabeticalPageLookup private (browser: Browser, pattern: String)
+class AlphabeticalPageLookup private (browser: Browser)
     extends Actor
     with ActorLogging {
 
@@ -30,15 +26,17 @@ class AlphabeticalPageLookup private (browser: Browser, pattern: String)
   override def receive: Receive = {
     case Pull(root, uri) =>
       val s = sender()
-      val head = context.actorOf(NumericalPageLookup.props) -> uri
+
+      val pattern = context.system.settings.config.getString("alpha.pattern")
+      val head = context.actorOf(NumericalPageLookup.props(), uri) -> uri
       val tail = for {
         raw <- (browser.get(root + uri) >> elementList(pattern)) takeWhile (_.text.trim.length == 1)
         _ = log.debug(s"parsing $raw")
         uri = raw >> attr("href")("a")
         _ = log.debug(s"adding task: $uri")
-        ref = context.actorOf(NumericalPageLookup.props)
+        ref = context.actorOf(NumericalPageLookup.props(), uri)
       } yield ref -> uri
-      val tasks = head +: tail// take 1
+      val tasks = head +: tail // take 1
       context.become(waiting(tasks, Seq.empty, s))
       tasks.foreach {
         case (r, uri) => r ! NumericalPageLookup.Pull(root, uri)

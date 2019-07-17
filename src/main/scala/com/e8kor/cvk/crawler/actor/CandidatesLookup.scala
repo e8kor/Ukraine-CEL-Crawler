@@ -6,11 +6,8 @@ import net.ruippeixotog.scalascraper.browser._
 
 object CandidatesLookup {
 
-  val props: Props = {
-    val browser = JsoupBrowser()
-    val pattern = "#pure-wrap > table > tbody > tr > td > a"
-
-    Props(new CandidatesLookup(browser, pattern))
+  def props(browser: Browser = JsoupBrowser()): Props = {
+    Props(new CandidatesLookup(browser))
   }
 
   sealed trait CandidatesAction
@@ -18,7 +15,7 @@ object CandidatesLookup {
   case class Response(candidates: Seq[Candidate]) extends CandidatesAction
 }
 
-class CandidatesLookup private (browser: Browser, pattern: String)
+class CandidatesLookup private (browser: Browser)
     extends Actor
     with ActorLogging {
 
@@ -29,15 +26,17 @@ class CandidatesLookup private (browser: Browser, pattern: String)
   override def receive: Receive = {
     case Pull(root, uri) =>
       val s = sender()
+      val pattern =
+        context.system.settings.config.getString("candidates.pattern")
       val doc = browser.get(root + uri)
       val candidates = for {
         raw <- (doc >> elementList(pattern)) filter (_.text.trim.length > 1)
         _ = log.debug(s"parsing $raw")
         uri = raw.attr("href")
         _ = log.debug(s"adding task: $uri")
-        ref = context.actorOf(CandidateLookup.props)
+        ref = context.actorOf(CandidateLookup.props(), uri)
       } yield ref -> uri
-      val tasks = candidates// take 1
+      val tasks = candidates // take 1
       context.become(waiting(tasks, Seq.empty, s))
       tasks.foreach {
         case (r, uri) => r ! CandidateLookup.Pull(root, uri)

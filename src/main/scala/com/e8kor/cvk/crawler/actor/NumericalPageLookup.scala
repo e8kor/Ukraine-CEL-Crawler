@@ -6,11 +6,8 @@ import net.ruippeixotog.scalascraper.browser._
 
 object NumericalPageLookup {
 
-  val props: Props = {
-    val browser = JsoupBrowser()
-    val pattern = "#wrap > main > div > table > tbody > tr > td > a"
-
-    Props(new NumericalPageLookup(browser, pattern))
+  def props(browser: Browser = JsoupBrowser()): Props = {
+    Props(new NumericalPageLookup(browser))
   }
 
   sealed trait PageAction
@@ -18,7 +15,7 @@ object NumericalPageLookup {
   case class Response(candidates: Seq[Candidate]) extends PageAction
 }
 
-class NumericalPageLookup private (browser: Browser, pattern: String)
+class NumericalPageLookup private (browser: Browser)
     extends Actor
     with ActorLogging {
 
@@ -29,13 +26,14 @@ class NumericalPageLookup private (browser: Browser, pattern: String)
   override def receive: Receive = {
     case Pull(root, uri) =>
       val s = sender()
-      val head = context.actorOf(CandidatesLookup.props) -> uri
+      val pattern = context.system.settings.config.getString("numerical.pattern")
+      val head = context.actorOf(CandidatesLookup.props(), uri) -> uri
       val tail = for {
         raw <- browser.get(root + uri) >> elementList(pattern)
         _ = log.debug(s"parsing $raw")
         uri = raw.attr("href")
         _ = log.debug(s"adding task: $uri")
-        ref = context.actorOf(CandidatesLookup.props)
+        ref = context.actorOf(CandidatesLookup.props(), uri)
       } yield ref -> uri
       val tasks = head +: tail // take 1
       context.become(waiting(tasks, Seq.empty, s))

@@ -1,7 +1,7 @@
 package com.e8kor.cvk.crawler.actor
 
 import akka.actor.{Actor, ActorLogging, Props}
-import cats.effect.{ContextShift, IO}
+import cats.effect.{Blocker, ContextShift, IO}
 import cats.implicits._
 import com.e8kor.cvk.crawler.model.Candidate
 import doobie._
@@ -9,8 +9,18 @@ import doobie.util.transactor.Transactor
 import doobie.util.transactor.Transactor.Aux
 import doobie._
 import doobie.implicits._
+import doobie.postgres._
+import doobie.postgres.implicits._
+import doobie.postgres.pgisimplicits._
+import doobie._
+import doobie.implicits._
+import doobie.util.ExecutionContexts
+import cats._
+import cats.data._
 import cats.effect.IO
 import cats.implicits._
+import com.zaxxer.hikari.HikariDataSource
+import doobie.hikari.HikariTransactor
 
 import scala.concurrent.ExecutionContext
 
@@ -27,38 +37,49 @@ object DatabaseWriter {
                         Map[String, String],
                         Option[Int])
 
-  def props(db: String, user: String, pass: String) = {
-    implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-
-    val xa: Aux[IO, Unit] = Transactor.fromDriverManager[IO](
-      "org.postgresql.Driver",
-      s"jdbc:postgresql:$db",
-      user,
-      pass
-    )
-
-    Props(new DatabaseWriter(xa)(cs))
+  def props(host: String = "candidates",
+            user: String = "postgres",
+            pass: String = ""): Props = {
+    Props(new DatabaseWriter())
   }
   sealed trait DatabaseWriterAction
-  case class Write(candidates: Seq[Candidate]) extends DatabaseWriterAction
+  case class Persist(candidates: Seq[Candidate]) extends DatabaseWriterAction
+  case object Done extends DatabaseWriterAction
 
 }
-class DatabaseWriter(xa: Aux[IO, Unit])(implicit cs: ContextShift[IO])
-    extends Actor
-    with ActorLogging {
+class DatabaseWriter() extends Actor with ActorLogging {
   import DatabaseWriter._
+  implicit var cs: ContextShift[IO] = _
+  implicit var xa: HikariTransactor[IO] = _
+
+  override def preStart(): Unit = {
+    cs = IO.contextShift(ExecutionContext.global)
+    val config = context.system.settings.config
+    val dataSource = new HikariDataSource
+    dataSource.setJdbcUrl(config.getString("db.url"))
+    dataSource.setUsername(config.getString("db.user"))
+    dataSource.setPassword(config.getString("db.pass"))
+    dataSource.setDriverClassName(config.getString("db.driverClassName"))
+    xa = HikariTransactor[IO](
+      dataSource,
+      ExecutionContext.global,
+      Blocker.liftExecutionContext(ExecutionContext.global)
+    )
+  }
 
   def insert(cs: Seq[Candidate]): doobie.ConnectionIO[Int] = {
     val sql =
       """insert into
-         |candidate (name, uri, association, number, photo, registration, details, attachments, references, hash) 
+         |candidate (name, uri, association, number, photo, registration, details, attachments, references, hash)
          |values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
     val data = cs.toList.flatMap(Candidate.unapply)
-    Update[CandidateInfo](sql).updateMany(data)
+
+    Update[DatabaseWriter.CandidateInfo](sql).updateMany(data)
   }
 
   override def receive: Receive = {
-    case Write(candidates) =>
+    case Persist(candidates) =>
+      log.debug(s"received command to persist ${candidates.length} candidates")
       insert(candidates).transact(xa).unsafeRunSync()
 
   }

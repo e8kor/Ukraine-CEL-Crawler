@@ -18,8 +18,22 @@ libraryDependencies ++= Seq(
   "org.scala-lang.modules" %% "scala-parser-combinators" % scalaParsersVersion,
   "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
   "ch.qos.logback" % "logback-classic" % logbackVersion,
+  "org.tpolecat" %% "doobie-hikari" % posgresVersion,
   "org.tpolecat" %% "doobie-postgres" % posgresVersion,
+  "org.tpolecat" %% "doobie-postgres-circe" % posgresVersion,
   "org.scalatest" %% "scalatest" % "3.0.5" % "test"
 )
 scalacOptions += "-Ypartial-unification"
-mainClass := Some("com.e8kor.cvk.crawler.Application")
+mainClass := Some("com.e8kor.cvk.crawler.Script")
+assemblyJarName in assembly := "app.jar"
+dockerfile in docker := {
+  val artifact: File = assembly.value
+  val artifactTargetPath = s"/app/${artifact.name}"
+
+  new Dockerfile {
+    from("openjdk:8-jre")
+    add(artifact, artifactTargetPath)
+    entryPoint("java", "-Dconfig.file=/app/config/application.conf", "-Dlogback.configurationFile=/app/config/logback.xml", "-jar", artifactTargetPath)
+  }
+}
+enablePlugins(DockerPlugin, AssemblyPlugin)

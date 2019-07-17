@@ -1,0 +1,25 @@
+version: '3.1'
+
+services:
+
+  database:
+    image: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: example
+      POSTGRES_USER: postgres
+      POSTGRES_DB: candidates
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+
+  crawler:
+    image: default/cvk-crawler
+    restart: always
+    volumes:
+      - ./config:/app/config

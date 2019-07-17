@@ -10,15 +10,11 @@ object CandidateLookup {
 
   type Table = List[List[Element]]
 
-  val props: Props = {
-    val browser = JsoupBrowser()
-    val namePath: String = "#wrap > main > div > h1"
-    val tablePath: String =
-      "#wrap > main > div > div.w100.pure-u-md-1 > table > tbody > tr"
-    Props(new CandidateLookup(browser, namePath, tablePath))
+  def props(browser: Browser = JsoupBrowser()): Props = {
+    Props(new CandidateLookup(browser))
   }
 
-  def newData(uri: String, hash:Int): Candidate =
+  def newData(uri: String, hash: Int): Candidate =
     Candidate("", uri, "", 0, None, "", "", Map.empty, Map.empty, Some(hash))
 
   sealed trait CandidateAction
@@ -26,9 +22,7 @@ object CandidateLookup {
   case class Response(candidate: Candidate) extends CandidateAction
 }
 
-class CandidateLookup private (browser: Browser,
-                               namePath: String,
-                               tablePath: String)
+class CandidateLookup private (browser: Browser)
     extends Actor
     with ActorLogging {
 
@@ -79,15 +73,19 @@ class CandidateLookup private (browser: Browser,
     case Pull(root, uri) =>
       log.debug(s"received task: $uri")
       val s = sender()
+
+      val namePath: String = context.system.settings.config.getString("candidate.namePath")
+      val tablePath: String = context.system.settings.config.getString("candidate.tablePath")
       val doc = browser.get(root + uri)
       val hash = MurmurHash3.stringHash(doc.toHtml)
-      val acc = newData(uri)
+      val acc = newData(uri, hash)
       val opt: Option[Candidate] = for {
         candidateName <- doc >?> text(namePath)
         _ = log.debug(s"candidate name: $candidateName")
+        named = acc.copy(name = candidateName)
         tableContent = (doc >> elementList(tablePath)) >> elementList("td")
         _ = log.debug(s"table lookup data: $tableContent")
-        entity = parseTable(acc, tableContent)
+        entity = parseTable(named, tableContent)
         _ = log.debug(s"candidate data: $entity")
       } yield entity
       s ! Response(opt.getOrElse(acc))
