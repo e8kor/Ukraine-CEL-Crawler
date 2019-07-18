@@ -1,9 +1,13 @@
 package com.e8kor.cvk.crawler.actor
 
+import java.time.LocalDateTime
+import java.util.Date
+
 import akka.actor.{Actor, ActorLogging, Props}
 import com.e8kor.cvk.crawler.model.Candidate
 import net.ruippeixotog.scalascraper.browser._
 import net.ruippeixotog.scalascraper.model.Element
+
 import scala.util.hashing.MurmurHash3
 
 object CandidateLookup {
@@ -15,7 +19,7 @@ object CandidateLookup {
   }
 
   def newData(uri: String, hash: Int): Candidate =
-    Candidate("", uri, "", 0, None, "", "", Map.empty, Map.empty, Some(hash))
+    Candidate("", uri, "", 0, None, "", "", Map.empty, Map.empty, Some(hash), new Date())
 
   sealed trait CandidateAction
   case class Pull(root: String, uri: String) extends CandidateAction

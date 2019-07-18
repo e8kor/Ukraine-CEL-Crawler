@@ -1,5 +1,8 @@
 package com.e8kor.cvk.crawler.actor
 
+import java.time.LocalDateTime
+import java.util.Date
+
 import akka.actor.{Actor, ActorLogging, Props}
 import cats.effect.{Blocker, ContextShift, IO}
 import cats.implicits._
@@ -35,7 +38,8 @@ object DatabaseWriter {
                         String,
                         Map[String, String],
                         Map[String, String],
-                        Option[Int])
+                        Option[Int],
+    Date)
 
   def props(host: String = "candidates",
             user: String = "postgres",
@@ -47,6 +51,7 @@ object DatabaseWriter {
   case object Done extends DatabaseWriterAction
 
 }
+
 class DatabaseWriter() extends Actor with ActorLogging {
   import DatabaseWriter._
   implicit var cs: ContextShift[IO] = _
@@ -58,7 +63,7 @@ class DatabaseWriter() extends Actor with ActorLogging {
     val dataSource = new HikariDataSource
     dataSource.setJdbcUrl(config.getString("db.url"))
     dataSource.setUsername(config.getString("db.user"))
-    dataSource.setPassword(config.getString("db.pass"))
+    dataSource.setPassword(config.getString("db.password"))
     dataSource.setDriverClassName(config.getString("db.driverClassName"))
     xa = HikariTransactor[IO](
       dataSource,
@@ -70,8 +75,8 @@ class DatabaseWriter() extends Actor with ActorLogging {
   def insert(cs: Seq[Candidate]): doobie.ConnectionIO[Int] = {
     val sql =
       """insert into
-         |candidate (name, uri, association, number, photo, registration, details, attachments, references, hash)
-         |values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+         |cvk.candidates (name, uri, association, pos, photo, registration, details, attachments, refs, hash, created)
+         |values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)""".stripMargin
     val data = cs.toList.flatMap(Candidate.unapply)
 
     Update[DatabaseWriter.CandidateInfo](sql).updateMany(data)

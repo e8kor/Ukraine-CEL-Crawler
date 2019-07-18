@@ -33,7 +33,15 @@ dockerfile in docker := {
   new Dockerfile {
     from("openjdk:8-jre")
     add(artifact, artifactTargetPath)
-    entryPoint("java", "-Dconfig.file=/app/config/application.conf", "-Dlogback.configurationFile=/app/config/logback.xml", "-jar", artifactTargetPath)
+    entryPoint(
+      "java",
+      "-Dfile.encoding=UTF-8",
+      "-Duser.timezone=UTC",
+      "-Dconfig.file=/app/config/application.conf",
+      "-Dlogback.configurationFile=/app/config/logback.xml",
+      "-jar",
+      artifactTargetPath
+    )
   }
 }
 enablePlugins(DockerPlugin, AssemblyPlugin)

@@ -52,9 +52,10 @@ class NumericalPageLookup private (browser: Browser)
       val task = todo.find(_._1 == s)
       task match {
         case Some(t) =>
-          val tasks = todo.filter(_ == t)
+          val tasks = todo.filter(_ != t)
           val completed = done ++ data
           if (tasks.isEmpty) {
+            context.become(receive)
             leader ! Response(completed)
           } else {
             context.become(waiting(tasks, completed, leader))
